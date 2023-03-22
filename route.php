@@ -15,7 +15,7 @@ function getRoute($url, $p_lat, $p_long, $d_lat, $d_long, $api_key)
     return json_decode($response, true);
 }
 
-$directions = getRoute($url, "-0.1383219181126606", "-78.47949502180954", "-0.13780693548696138", "-78.48749873306527", "AIzaSyCjO1DuHP-tFPBwEBqc_A6FoJTtMvOjoU8");
+$directions = getRoute($url, "-0.1383219181126606", "-78.47949502180954", "-0.13780693548696138", "-78.48749873306527", "test");
 $duration = $directions['routes'][0]['legs'][0]['duration']['value'];
 // echo $duration;
 
