@@ -123,7 +123,7 @@ function is_between_minutes($distance_matrix, $minutes)
             return false;
         }
     };
-    return true;
+    return $time['duration']['value'];
 }
 
 /* 
@@ -134,8 +134,9 @@ function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_m
     $checkpoints_between_six_minutes = [];
     foreach ($checkpoints as $checkpoint) {
         $distance_matrix = get_distance_matrix($distance_matrix_url, [$checkpoint], $route, $api_key);
-        if (is_between_minutes($distance_matrix, $minutes)) {
-            $checkpoints_between_six_minutes[] = $checkpoint;
+        $checkpoint_duration = is_between_minutes($distance_matrix, $minutes);
+        if ($checkpoint_duration) {
+            $checkpoints_between_six_minutes[] = [$checkpoint, $checkpoint_duration];
         }
     }
     return $checkpoints_between_six_minutes;
@@ -146,8 +147,7 @@ function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_m
 
 
 /* I made everything inside functions so you can reuse them when you need */
-
-
+/* It returns the checkpoint, and the time to it [checkpoint, time] */
 function get_checkpoints_between_six_mins_to_route(
     $checkpointsList,
     $pLat,
