@@ -3,7 +3,7 @@
 /* 
 I'm assuming the url is placed as an enviroment variable, so for this example it is hardcoded
 */
-$url = 'https://maps.googleapis.com/maps/api/directions/json';
+// $url = 'https://maps.googleapis.com/maps/api/directions/json';
 
 
 /* 
@@ -64,7 +64,7 @@ function get_nodes($steps)
 Once we get the nodes, we can format them to be used in the distance matrix.
 Again, for this example the url for the api is hardcoded and for profuction it should be an enviroment variable.
 */
-$distance_matrix_url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
+// $distance_matrix_url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
 
 
 /* 
@@ -129,11 +129,11 @@ function is_between_minutes($distance_matrix, $minutes)
 /* 
 Check if there is a checkpoint between 6 minutes from the route and save them in an array.
 */
-function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_matrix_url)
+function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_matrix_url, $api_key)
 {
     $checkpoints_between_six_minutes = [];
     foreach ($checkpoints as $checkpoint) {
-        $distance_matrix = get_distance_matrix($distance_matrix_url, [$checkpoint], $route, "test");
+        $distance_matrix = get_distance_matrix($distance_matrix_url, [$checkpoint], $route, $api_key);
         if (is_between_minutes($distance_matrix, $minutes)) {
             $checkpoints_between_six_minutes[] = $checkpoint;
         }
@@ -148,11 +148,19 @@ function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_m
 /* I made everything inside functions so you can reuse them when you need */
 
 
-function get_checkpoints_between_six_mins_to_route($checkpointsList, $pLat, $pLng, $dLat, $dLng, $distance_matrix_api_url, $maps_api_url,  $apiKey)
-{
-    $main_route = getRoute($maps_api_url, $pLat, $pLng, $dLat, $dLng, $apiKey);
+function get_checkpoints_between_six_mins_to_route(
+    $checkpointsList,
+    $pLat,
+    $pLng,
+    $dLat,
+    $dLng,
+    $distance_matrix_api_url = 'https://maps.googleapis.com/maps/api/distancematrix/json',
+    $maps_api_url = 'https://maps.googleapis.com/maps/api/directions/json',
+    $api_key
+) {
+    $main_route = getRoute($maps_api_url, $pLat, $pLng, $dLat, $dLng, $api_key);
     $steps = $main_route['routes'][0]['legs'][0]['steps'];
     $nodes = get_nodes($steps);
-    $checkpointsListWithTime = checkpoints_between_minutes($checkpointsList, $nodes, 6, $distance_matrix_api_url);
+    $checkpointsListWithTime = checkpoints_between_minutes($checkpointsList, $nodes, 6, $distance_matrix_api_url, $api_key);
     return $checkpointsListWithTime;
 }

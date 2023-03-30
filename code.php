@@ -7,7 +7,7 @@ public function createRide($driverId, $pickupLocation, $pLat, $pLng, $dropLocati
 
 //Part of code
 $checkpointsList = "";
-$checkpoints_between_six_minutes = get_checkpoints_between_six_mins_to_route($checkpointsList, $pLat, $pLng, $dLat, $dLng, $distance_matrix_api_url, $maps_api_url, $apiKey);
+$checkpoints_between_six_minutes = get_checkpoints_between_six_mins_to_route($checkpointsList, $pLat, $pLng, $dLat, $dLng, $apiKey);
 
 
 $timestamp = $this->getCurrentTimeStamp();
