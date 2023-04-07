@@ -39,7 +39,7 @@ BEGIN
 			get_distance(user_lat, user_log, lat, log) <= distance
 		) distance_table;
 
-	IF input_param IS NOT NULL THEN
+	IF nearest_checkpoints IS NOT NULL THEN
     	RETURN TRUE;
  	ELSE
     	RETURN FALSE;
