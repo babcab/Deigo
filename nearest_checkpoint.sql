@@ -21,7 +21,7 @@ $$
 
 DELIMITER $$
 CREATE FUNCTION get_nearest_checkpoints(user_lat FLOAT, user_log FLOAT, checkpoints_list JSON, distance FLOAT) 
-RETURNS JSON
+RETURNS BOOLEAN
 DETERMINISTIC
 BEGIN 
   DECLARE nearest_checkpoints JSON;
@@ -38,7 +38,12 @@ BEGIN
 		WHERE 
 			get_distance(user_lat, user_log, lat, log) <= distance
 		) distance_table;
-	RETURN nearest_checkpoints;
+
+	IF input_param IS NOT NULL THEN
+    	RETURN TRUE;
+ 	ELSE
+    	RETURN FALSE;
+  	END IF;
 END;
 $$
 
