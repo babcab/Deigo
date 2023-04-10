@@ -1,0 +1,234 @@
+<?php
+class DbOperation
+{
+
+    private $mapsApiKey = 'AIzaSyCkpI9q1VhAaXHKdUsdjknfjkdsbfjkdsbf';
+
+    //Code 1
+    public function createRide($driverId, $pickupLocation, $pLat, $pLng, $dropLocation, $dLat, $dLng, $date, $time, $numberOfSeats, $pricePerSeat, $apiKey)
+    {
+
+        //TODO
+        //call google maps with driver's pickup and drop location
+        //we will provide the drop-off time of the driver to Google API so that we can see how much time it will take for the driver to reach destination and what time should he leave from his pickup location
+        //Calculate nearest checkpoints on the route from list of our checkpoints (send list of checkpoints +- 5 mins or +- 2 miles)
+
+        $checkpointsList = ["42.350950, -71.089155", "42.340724, -71.099705", "42.357169, -71.129075", "42.342539, -71.144350", "42.356250, -71.180775"];
+        $checkpointsListWithTime = $this->get_checkpoints_between_six_mins_to_route($checkpointsList, $pLat, $pLng, $dLat, $dLng, $this->mapsApiKey);
+
+
+        $timestamp = $this->getCurrentTimeStamp();
+        $stmt = $this->con->prepare("INSERT INTO rides (driverId, pickupLocation, pLat, pLng, dropLocation, dLat, dLng, date, time, numberOfSeats, pricePerSeat, apiKey, timestamp, ipAddress, checkpoints, numberOfSeatsAvailable) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssssssssssssssss", $driverId, $pickupLocation, $pLat, $pLng, $dropLocation, $dLat, $dLng, $date, $time, $numberOfSeats, $pricePerSeat, $apiKey, $timestamp, $this->getClientIP(), $checkpointsListWithTime, $numberOfSeats);
+        $result = $stmt->execute();
+        $rideId = $stmt->insert_id;
+        $stmt->close();
+        if (!$result) {
+            return false;
+        } else {
+            return $rideId;
+        }
+    }
+
+
+    /*
+    I'm assuming the url is placed as an enviroment variable, so for this example it is hardcoded
+    */
+// $url = 'https://maps.googleapis.com/maps/api/directions/json';
+
+
+    /*
+    This function collects all the info related to the route from the pick up point to the drop off point.
+    It has the steps of the route, the distance, the duration, the start and end location, etc.
+    */
+    function getRoute($url, $p_lat, $p_long, $d_lat, $d_long, $api_key)
+    {
+        /*
+        All the curls calls can be enclosed in a function, but for this example I'm just going to leave it like this.
+        Maybe you have already implemented a function like this in your code.
+        */
+        $request_url = $url . '?origin=' . $p_lat . ',' . $p_long . '&destination=' . $d_lat . ',' . $d_long . '&key=' . $api_key;
+        $curl = curl_init($request_url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        $response = curl_exec($curl);
+        curl_close($curl);
+        return json_decode($response, true);
+    }
+
+    /*
+    Once we have the route, we can get the duration of the route in seconds, the distance in meters, and the steps of the route.
+    */
+// $directions = getRoute($url, "-0.1383219181126606", "-78.47949502180954", "-0.13780693548696138", "-78.48749873306527", "test");
+// $duration = $directions['routes'][0]['legs'][0]['duration']['value'];
+// $distance = $directions['routes'][0]['legs'][0]['distance']['value'];
+// $steps = $directions['routes'][0]['legs'][0]['steps'];
+
+
+    /*
+    According to the documentation, the steps are sections of the route, we have initial and final points, and the distance and duration of each section.
+    However, the final point of one step is going to be the initial point of the next step.
+    */
+    function get_nodes($steps)
+    {
+        $nodes = [];
+        $prev_end_location = [];
+        foreach ($steps as $step) {
+            $start_location = $step['start_location'];
+            $end_location = $step['end_location'];
+            if ($prev_end_location == $start_location) {
+                $nodes[] = $end_location;
+            } else {
+                $nodes[] = $start_location;
+                $nodes[] = $end_location;
+            }
+            $prev_end_location = $end_location;
+        }
+        return $nodes;
+    }
+
+// $nodes = get_nodes($steps);
+
+    /*
+    Once we get the nodes, we can format them to be used in the distance matrix.
+    Again, for this example the url for the api is hardcoded and for profuction it should be an enviroment variable.
+    */
+// $distance_matrix_url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
+
+
+    /*
+    In the documentations says a node should be lat,long, without any space between then.
+    And, to send a set of nodes, they have tp be separated by a pipe.
+    */
+    function format_node_to_destination($node)
+    {
+        return $node['lat'] . ',' . $node['lng'];
+    }
+
+    function format_destinations($nodes)
+    {
+        $destinations = [];
+        foreach ($nodes as $node) {
+            $destinations[] = $this->format_node_to_destination($node);
+        }
+        return implode('|', $destinations);
+    }
+
+
+    /*
+    Here, the distance matrix between checkpoints and a route node is calculated.
+    */
+    function get_distance_matrix($url, $origins, $destinations, $api_key)
+    {
+        $origins_str = implode('|', $origins);
+        $destinations_str = $this->format_destinations($destinations);
+        $request_url = $url . '?origins=' . $origins_str . '&destinations=' . $destinations_str . '&key=' . $api_key;
+
+        $curl = curl_init($request_url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        $response = curl_exec($curl);
+        curl_close($curl);
+        return json_decode($response, true);
+    }
+
+    /*
+    The distance matrix give us the duration in seconds and the distance in meters from the node of the route to the checkpoints.
+    Note: The documentation says that we should not use multiple origins, so I'm iterating over each checkpoint.
+    */
+// $distance_matrix = get_distance_matrix($distance_matrix_url, ["-0.13834337572182936,-78.47949502180954"], $nodes, "test");
+
+
+    /*
+    checks if the duration of one checkpoint to the route is less than 6 minutes.
+    */
+    function is_between_minutes($distance_matrix, $minutes)
+    {
+        $times_from_route = $distance_matrix['rows'][0]['elements'];
+        foreach ($times_from_route as $time) {
+            if ($time['duration']['value'] > $minutes * 60) {
+                return false;
+            }
+        };
+        return $time['duration']['value'];
+    }
+
+    /*
+    Check if there is a checkpoint between 6 minutes from the route and save them in an array.
+    */
+    function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_matrix_url, $api_key)
+    {
+        $checkpoints_between_six_minutes = [];
+        foreach ($checkpoints as $checkpoint) {
+            $distance_matrix = $this->get_distance_matrix($distance_matrix_url, [$checkpoint], $route, $api_key);
+            $checkpoint_duration = $this->is_between_minutes($distance_matrix, $minutes);
+            if ($checkpoint_duration) {
+                $checkpoints_between_six_minutes[] = [$checkpoint, $checkpoint_duration];
+            }
+        }
+        return $checkpoints_between_six_minutes;
+    }
+
+// $checkpoints = ["-0.13957718821592419,-78.48562118730912", "-0.1428717384263475,-78.49239528170591"];
+// checkpoints_between_six_minutes($checkpoints, $nodes, $distance_matrix_url);
+
+
+    /* I made everything inside functions so you can reuse them when you need */
+    /* It returns the checkpoint, and the time to it [checkpoint, time] */
+    function get_checkpoints_between_six_mins_to_route(
+        $checkpointsList,
+        $pLat,
+        $pLng,
+        $dLat,
+        $dLng,
+        $api_key
+    )
+    {
+
+        $distance_matrix_api_url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
+        $maps_api_url = 'https://maps.googleapis.com/maps/api/directions/json';
+
+        $main_route = $this->getRoute($maps_api_url, $pLat, $pLng, $dLat, $dLng, $api_key);
+        $steps = $main_route['routes'][0]['legs'][0]['steps'];
+        $nodes = $this->get_nodes($steps);
+        $checkpointsListWithTime = $this->checkpoints_between_minutes($checkpointsList, $nodes, 6, $distance_matrix_api_url, $api_key);
+        return $checkpointsListWithTime;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    //Code 2
+    public function searchRide($userId, $pickupLocation, $pLat, $pLng, $dropLocation, $dLat, $dLng, $date, $time, $maxPricePerSeat, $timeDifference, $apiKey){
+        //TODO
+        //write the function for SQL
+        //Here get_nearest_checkpoints(?, ?, checkpoints, 1.0) == TRUE is the function
+        //It takes the array of checkpoints calculated from code 1 above
+        //It decodes the array, see if any of the checkpoints in the array is 1 km away from the pickup location given above in parameters
+        //If there is at least once checkpoint, we return true and use that as a condition for the SQL
+
+        $stmt = $this->con->prepare("SELECT rides.rideId, rides.driverId, rides.pickupLocation, rides.pLat, rides.pLng, rides.dropLocation, rides.dLat, rides.dLng, rides.date, rides.time, rides.numberOfSeats, rides.pricePerSeat, rides.timestamp, users.userId, users.firstName, users.lastName, users.college, users.program, users.studentType, users.graduationYear, users.userPicture, users.carMake, users.carModel, users.plateNumber FROM rides, users INNER JOIN users on users.userId = rides.driverId WHERE rides.status = ? AND rides.numberOfSeats >= 1 AND rides.date = ? AND pricePerSeat <= ? AND get_nearest_checkpoints(?, ?, checkpoints, 1.0) == TRUE)");
+        $stmt->bind_param("sssssss", $this->rideStatusCreated, $date, $maxPricePerSeat, $pLat, $pLng, $time, $timeDifference);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $allRides = array();
+        while($token = $result->fetch_assoc()){
+            array_push($allRides, $token);
+        }
+        return $allRides;
+    }
+}
