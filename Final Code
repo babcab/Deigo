@@ -12,6 +12,8 @@ class DbOperation
         //call google maps with driver's pickup and drop location
         //we will provide the drop-off time of the driver to Google API so that we can see how much time it will take for the driver to reach destination and what time should he leave from his pickup location
         //Calculate nearest checkpoints on the route from list of our checkpoints (send list of checkpoints +- 5 mins or +- 2 miles)
+        
+        //There will be one other copy of the code. It will have a modified version. In that part, we will give pickup and dropoff location of the user along with a stop (which will be our checkpoint). And then we will continue the process of calculating the nearest checkpoints. 
 
         $checkpointsList = ["42.350950, -71.089155", "42.340724, -71.099705", "42.357169, -71.129075", "42.342539, -71.144350", "42.356250, -71.180775"];
         $checkpointsListWithTime = $this->get_checkpoints_between_six_mins_to_route($checkpointsList, $pLat, $pLng, $dLat, $dLng, $this->mapsApiKey);
