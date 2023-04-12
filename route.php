@@ -10,6 +10,26 @@ I'm assuming the url is placed as an enviroment variable, so for this example it
 This function collects all the info related to the route from the pick up point to the drop off point.
 It has the steps of the route, the distance, the duration, the start and end location, etc.
 */
+
+$checkpointsList = '
+        [  
+            {
+                "lat": 42.340724,
+                "lng": -71.099705
+            },
+            {
+                "lat": 42.357169,
+                "lng": -71.129075
+            },
+            {
+                "lat": 42.342539,
+                "lng": -71.144350
+            }
+        ]';
+
+
+
+
 function getRoute($url, $p_lat, $p_long, $d_lat, $d_long, $api_key)
 {
     /* 
@@ -92,9 +112,12 @@ Here, the distance matrix between checkpoints and a route node is calculated.
 function get_distance_matrix($url, $origins, $destinations, $api_key)
 {
     $origins_str = implode('|', $origins);
+    // echo $origins_str;
     $destinations_str = format_destinations($destinations);
+    // echo $destinations_str;
     $request_url = $url . '?origins=' . $origins_str . '&destinations=' . $destinations_str . '&key=' . $api_key;
 
+    // echo $request_url;
     $curl = curl_init($request_url);
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_HTTPHEADER, [
@@ -102,6 +125,7 @@ function get_distance_matrix($url, $origins, $destinations, $api_key)
     ]);
     $response = curl_exec($curl);
     curl_close($curl);
+    echo $response;
     return json_decode($response, true);
 }
 
@@ -117,6 +141,9 @@ checks if the duration of one checkpoint to the route is less than 6 minutes.
 */
 function is_between_minutes($distance_matrix, $minutes)
 {
+    if ($distance_matrix == null) {
+        return 0;
+    }
     $times_from_route = $distance_matrix['rows'][0]['elements'];
     foreach ($times_from_route as $time) {
         if ($time['duration']['value'] > $minutes * 60) {
@@ -133,10 +160,12 @@ function checkpoints_between_minutes($checkpoints, $route, $minutes, $distance_m
 {
     $checkpoints_between_six_minutes = [];
     foreach ($checkpoints as $checkpoint) {
-        $distance_matrix = get_distance_matrix($distance_matrix_url, [$checkpoint], $route, $api_key);
+        // echo sprintf("%f, %f", $checkpoint->lat, $checkpoint->lng);
+        $distance_matrix = get_distance_matrix($distance_matrix_url, [sprintf("%f,%f", $checkpoint->lat, $checkpoint->lng)], $route, $api_key);
         $checkpoint_duration = is_between_minutes($distance_matrix, $minutes);
         if ($checkpoint_duration) {
-            $checkpoints_between_six_minutes[] = [$checkpoint, $checkpoint_duration];
+            $checkpoint->duration = $checkpoint_duration;
+            $checkpoints_between_six_minutes[] = $checkpoint;
         }
     }
     return $checkpoints_between_six_minutes;
@@ -154,13 +183,25 @@ function get_checkpoints_between_six_mins_to_route(
     $pLng,
     $dLat,
     $dLng,
+    $api_key,
     $distance_matrix_api_url = 'https://maps.googleapis.com/maps/api/distancematrix/json',
-    $maps_api_url = 'https://maps.googleapis.com/maps/api/directions/json',
-    $api_key
+    $maps_api_url = 'https://maps.googleapis.com/maps/api/directions/json'
 ) {
     $main_route = getRoute($maps_api_url, $pLat, $pLng, $dLat, $dLng, $api_key);
     $steps = $main_route['routes'][0]['legs'][0]['steps'];
     $nodes = get_nodes($steps);
-    $checkpointsListWithTime = checkpoints_between_minutes($checkpointsList, $nodes, 6, $distance_matrix_api_url, $api_key);
+    $checkpointsListWithTime = checkpoints_between_minutes(json_decode($checkpointsList), $nodes, 6, $distance_matrix_api_url, $api_key);
     return $checkpointsListWithTime;
 }
+
+// {
+//     "lat": 42.350950,
+//     "lng": -71.089155
+// },
+// {
+//     "lat": 42.356250,
+//     "lng": -71.180775
+// }
+
+echo json_encode(get_checkpoints_between_six_mins_to_route($checkpointsList, 42.350950, -71.089155, 42.356250, -71.180775, 'AIzaSyB6qeKfwNa6BM-AlnanVsxfUgXM13CsFMY'));
+// echo json_decode($checkpointsList)[0]->lat;
