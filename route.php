@@ -203,5 +203,5 @@ function get_checkpoints_between_six_mins_to_route(
 //     "lng": -71.180775
 // }
 
-echo json_encode(get_checkpoints_between_six_mins_to_route($checkpointsList, 42.350950, -71.089155, 42.356250, -71.180775, 'AIzaSyB6qeKfwNa6BM-AlnanVsxfUgXM13CsFMY'));
+echo json_encode(get_checkpoints_between_six_mins_to_route($checkpointsList, 42.350950, -71.089155, 42.356250, -71.180775, 'AIzaSy'));
 // echo json_decode($checkpointsList)[0]->lat;
