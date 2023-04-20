@@ -1,5 +1,5 @@
 DELIMITER $$
-CREATE FUNCTION get_distance(pLat FLOAT, pLog FLOAT, dLat FLOAT, dLog FLOAT) 
+CREATE FUNCTION get_distance(pLat FLOAT, plng FLOAT, dLat FLOAT, dlng FLOAT) 
 RETURNS FLOAT 
 DETERMINISTIC 
 BEGIN 
@@ -9,7 +9,7 @@ SET
   distance = (
     1.45 * 6371 * 2 * ASIN(
       SQRT(
-        POWER(SIN(RADIANS(dLat - pLat) / 2), 2) + COS(RADIANS(pLat)) * COS(RADIANS(dLat)) * POWER(SIN(RADIANS(dLog - pLog) / 2), 2)
+        POWER(SIN(RADIANS(dLat - pLat) / 2), 2) + COS(RADIANS(pLat)) * COS(RADIANS(dLat)) * POWER(SIN(RADIANS(dlng - plng) / 2), 2)
       )
     )
   );
@@ -20,23 +20,23 @@ END;
 $$
 
 DELIMITER $$
-CREATE FUNCTION get_nearest_checkpoints(user_lat FLOAT, user_log FLOAT, checkpoints_list JSON, distance FLOAT) 
+CREATE FUNCTION get_nearest_checkpoints(user_lat FLOAT, user_lng FLOAT, checkpoints_list JSON, distance FLOAT) 
 RETURNS BOOLEAN
 DETERMINISTIC
 BEGIN 
   DECLARE nearest_checkpoints JSON;
-	SELECT JSON_ARRAYAGG(JSON_OBJECT('lat', distance_table.lat, 'log', distance_table.log)) INTO nearest_checkpoints FROM (
+	SELECT JSON_ARRAYAGG(JSON_OBJECT('lat', distance_table.lat, 'lng', distance_table.lng)) INTO nearest_checkpoints FROM (
 		SELECT
 			lat,
-			log,
-			get_distance(user_lat, user_log, lat, log) as distance
+			lng,
+			get_distance(user_lat, user_lng, lat, lng) as distance
 		FROM
 			JSON_TABLE(
 			checkpoints_list,
-			'$[*]' COLUMNS (lat FLOAT PATH '$.lat', log FLOAT PATH '$.log')
+			'$[*]' COLUMNS (lat FLOAT PATH '$.lat', lng FLOAT PATH '$.lng')
 			) jt
 		WHERE 
-			get_distance(user_lat, user_log, lat, log) <= distance
+			get_distance(user_lat, user_lng, lat, lng) <= distance
 		) distance_table;
 
 	IF nearest_checkpoints IS NOT NULL THEN
@@ -64,19 +64,19 @@ I left an example of the data for checkpoints should look in test.json file
 -- Version of nearest_checkpoint for MySQL 5.7
 
 DELIMITER $$
-CREATE FUNCTION get_nearest_checkpoints(user_lat FLOAT, user_log FLOAT, checkpoints_list TEXT, distance FLOAT) 
+CREATE FUNCTION get_nearest_checkpoints(user_lat FLOAT, user_lng FLOAT, checkpoints_list TEXT, distance FLOAT) 
 RETURNS BOOLEAN
 BEGIN 
   DECLARE nearest_checkpoints TEXT;
-	SELECT CONCAT('[', GROUP_CONCAT(CONCAT('{"lat":', lat, ',"log":', log, '}')), ']') INTO nearest_checkpoints FROM (
+	SELECT CONCAT('[', GROUP_CONCAT(CONCAT('{"lat":', lat, ',"lng":', lng, '}')), ']') INTO nearest_checkpoints FROM (
 		SELECT
 			lat,
-			log,
-			get_distance(user_lat, user_log, lat, log) as distance
+			lng,
+			get_distance(user_lat, user_lng, lat, lng) as distance
 		FROM
 			(SELECT 
 			  CONVERT(SUBSTRING_INDEX(SUBSTRING_INDEX(t.t.col,',',n.n),',',-1),DECIMAL(10,6)) AS lat,
-			  CONVERT(SUBSTRING_INDEX(SUBSTRING_INDEX(t.t.col,',',n.n+1),',',-1),DECIMAL(10,6)) AS log
+			  CONVERT(SUBSTRING_INDEX(SUBSTRING_INDEX(t.t.col,',',n.n+1),',',-1),DECIMAL(10,6)) AS lng
 			FROM 
 			  (SELECT @row:=@row+1 as id, JSON_EXTRACT(checkpoints_list, CONCAT('$[', @row-1, ']')) as col
 			   FROM (SELECT @row:=0) r
@@ -89,7 +89,7 @@ BEGIN
 			  ) n
 		) distance_table
 		WHERE 
-			get_distance(user_lat, user_log, lat, log) <= distance
+			get_distance(user_lat, user_lng, lat, lng) <= distance
 		) distance_table;
 
 	IF nearest_checkpoints IS NOT NULL AND nearest_checkpoints != '[]' THEN
@@ -99,3 +99,35 @@ BEGIN
   	END IF;
 END$$
 DELIMITER ;
+
+
+-- MySQL 8
+DELIMITER $$
+CREATE FUNCTION get_nearest_checkpoints(user_lat FLOAT, user_lng FLOAT, checkpoints_list TEXT, distance FLOAT) 
+RETURNS BOOLEAN
+DETERMINISTIC
+BEGIN 
+  DECLARE nearest_checkpoints JSON;
+	SELECT JSON_ARRAYAGG(JSON_OBJECT('lat', distance_table.lat, 'lng', distance_table.lng)) INTO nearest_checkpoints FROM (
+		SELECT
+			lat,
+			lng,
+			get_distance(user_lat, user_lng, lat, lng) as distance
+		FROM
+			JSON_TABLE(
+			checkpoints_list,
+			'$[*]' COLUMNS (lat FLOAT PATH '$.lat', lng FLOAT PATH '$.lng')
+			) jt
+		WHERE 
+			get_distance(user_lat, user_lng, lat, lng) <= distance
+		) distance_table;
+
+	IF nearest_checkpoints IS NOT NULL THEN
+    	RETURN TRUE;
+ 	ELSE
+    	RETURN FALSE;
+  	END IF;
+END;
+$$
+
+SELECT get_nearest_checkpoints(42.358068, -71.129002, '[{"lat":42.358033,"lng":-71.129075},{"lat":42.342539,"lng":-71.14435},{"lat":42.35625,"lng":-71.180775}]', 1.0) as test;
